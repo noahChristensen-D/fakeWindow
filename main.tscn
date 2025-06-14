@@ -1,14 +1,13 @@
 [gd_scene load_steps=5 format=3 uid="uid://cij17kc16qhvl"]
 
-[ext_resource type="Script" uid="uid://cejsbil03wne5" path="res://main.gd" id="1_ig7tw"]
 [ext_resource type="Script" uid="uid://cxx61mq0jl3j1" path="res://control.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://djq6858xkylrn" path="res://osc_receiver.gd" id="3_h2yge"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_7dm0k"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_ig7tw"]
 
 [node name="Main" type="Node3D"]
-script = ExtResource("1_ig7tw")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(10, 0, 0, 0, 0.1, 0, 0, 0, 10, 8.23736e-05, -0.00503814, 0)
@@ -51,3 +50,6 @@ offset_top = 104.0
 offset_right = 134.0
 offset_bottom = 135.0
 text = "Toggle FPS"
+
+[node name="OscReceiver" type="Node" parent="."]
+script = ExtResource("3_h2yge")

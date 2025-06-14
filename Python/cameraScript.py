@@ -37,12 +37,24 @@ while cap.isOpened():
 
     if results.multi_face_landmarks:
         landmarks = results.multi_face_landmarks[0].landmark
+        for face_landmarks in results.multi_face_landmarks:
+            mp.solutions.drawing_utils.draw_landmarks(
+            image=frame,
+            landmark_list=face_landmarks,
+            connections=mp_face_mesh.FACEMESH_TESSELATION,
+            landmark_drawing_spec=None,
+            connection_drawing_spec=mp.solutions.drawing_styles
+                .get_default_face_mesh_tesselation_style()
+        )
+
         nose = landmarks[1]
         x, y, z = nose.x, nose.y, nose.z
 
         scaled_x = (x - 0.5) * 2
         scaled_y = (y - 0.5) * -2
         scaled_z = z * 5
+
+        ###print(f"Sending OSC → x: {scaled_x:.2f}, y: {scaled_y:.2f}, z: {scaled_z:.2f}")
 
         client.send_message("/head/x", scaled_x)
         client.send_message("/head/y", scaled_y)
