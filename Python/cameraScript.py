@@ -1,67 +1,66 @@
+import asyncio
+import websockets
 import cv2
 import mediapipe as mp
-from pythonosc.udp_client import SimpleUDPClient
-import signal
-import sys
 
-# === OSC Setup ===
-client = SimpleUDPClient("127.0.0.1", 8000)
-
-# === Mediapipe Setup ===
+# === MediaPipe face mesh setup ===
 mp_face_mesh = mp.solutions.face_mesh
+mp_drawing = mp.solutions.drawing_utils
+mp_style = mp.solutions.drawing_styles
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1)
 
-# === Webcam Setup ===
+# === OpenCV webcam ===
 cap = cv2.VideoCapture(0)
 
-# === Handle Ctrl+C Gracefully ===
-def shutdown_handler(sig, frame):
-    print("Shutting down...")
-    cap.release()
-    cv2.destroyAllWindows()
-    sys.exit(0)
+# === Async WebSocket handler ===
+async def head_tracking_server(websocket, path):
+    print("🟢 Godot connected.")
+    try:
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success:
+                continue
 
-signal.signal(signal.SIGINT, shutdown_handler)
+            frame = cv2.flip(frame, 1)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = face_mesh.process(rgb)
 
-print("Press ESC in the camera window or Ctrl+C in the terminal to quit.")
+            if results.multi_face_landmarks:
+                for face_landmarks in results.multi_face_landmarks:
+                    # Draw the face mesh on the frame
+                    mp_drawing.draw_landmarks(
+                        image=frame,
+                        landmark_list=face_landmarks,
+                        connections=mp_face_mesh.FACEMESH_TESSELATION,
+                        landmark_drawing_spec=None,
+                        connection_drawing_spec=mp_style
+                            .get_default_face_mesh_tesselation_style()
+                    )
 
-# === Main Loop ===
-while cap.isOpened():
-    success, frame = cap.read()
-    if not success:
-        continue
+                # Send the nose tip position (landmark 1)
+                nose = results.multi_face_landmarks[0].landmark[1]
+                x = (nose.x - 0.5) * 2
+                y = (nose.y - 0.5) * -2
+                z = nose.z * 5
+                data = f"{x:.3f},{y:.3f},{z:.3f}"
 
-    frame = cv2.flip(frame, 1)
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = face_mesh.process(rgb)
+                await websocket.send(data)
 
-    if results.multi_face_landmarks:
-        landmarks = results.multi_face_landmarks[0].landmark
-        for face_landmarks in results.multi_face_landmarks:
-            mp.solutions.drawing_utils.draw_landmarks(
-            image=frame,
-            landmark_list=face_landmarks,
-            connections=mp_face_mesh.FACEMESH_TESSELATION,
-            landmark_drawing_spec=None,
-            connection_drawing_spec=mp.solutions.drawing_styles
-                .get_default_face_mesh_tesselation_style()
-        )
+            cv2.imshow("Webcam Tracking", frame)
+            if cv2.waitKey(1) & 0xFF == 27:  # Esc key to exit
+                break
 
-        nose = landmarks[1]
-        x, y, z = nose.x, nose.y, nose.z
+    except websockets.ConnectionClosed:
+        print("🔌 Godot disconnected.")
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
 
-        scaled_x = (x - 0.5) * 2
-        scaled_y = (y - 0.5) * -2
-        scaled_z = z * 5
+# === Async entry point for newer Python versions ===
+async def main():
+    print("🚀 Starting WebSocket server at ws://localhost:8765 ...")
+    async with websockets.serve(head_tracking_server, "localhost", 8765):
+        await asyncio.Future()  # Keeps the server alive
 
-        ###print(f"Sending OSC → x: {scaled_x:.2f}, y: {scaled_y:.2f}, z: {scaled_z:.2f}")
-
-        client.send_message("/head/x", scaled_x)
-        client.send_message("/head/y", scaled_y)
-        client.send_message("/head/z", scaled_z)
-
-    cv2.imshow("Head Tracking", frame)
-    if cv2.waitKey(1) & 0xFF == 27:  # ESC key
-        break
-
-shutdown_handler(None, None)
+# === Start the server ===
+asyncio.run(main())
